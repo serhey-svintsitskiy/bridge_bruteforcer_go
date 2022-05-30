@@ -3,6 +3,7 @@ package bruteforcer
 import (
 	"fmt"
 	"gonum.org/v1/gonum/stat/combin"
+	"sync"
 )
 
 const MaxTime = 25
@@ -10,6 +11,9 @@ const MaxMoveCount = 5
 
 type Bruteforcer struct {
 	results []Stats
+	c       chan Stats
+	sync.Mutex
+	jobs int
 }
 
 func (bruteforcer *Bruteforcer) addResult(stats Stats) {
@@ -31,11 +35,14 @@ func (bruteforcer *Bruteforcer) getComb(movers Movers, quantity int) []Movers {
 	return combinationList
 }
 
-func (bruteforcer *Bruteforcer) tryMove(stats Stats, isForward bool, movers Movers, c chan Stats) {
+func (bruteforcer *Bruteforcer) tryMove(stats Stats, isForward bool, movers Movers) {
+	defer func() {
+		bruteforcer.jobs--
+	}()
 	stats.move(movers, isForward)
 
 	if stats.isFinished() {
-		c <- stats
+		bruteforcer.c <- stats
 		//bruteforcer.addResult(stats)
 		return
 	}
@@ -55,10 +62,8 @@ func (bruteforcer *Bruteforcer) multiply(stats Stats, isForward bool) {
 
 	combList := bruteforcer.getComb(possibleMovers, moversCount)
 	for _, movers := range combList {
-		c := make(chan Stats)
-		go bruteforcer.tryMove(stats, isForward, movers, c)
-
-		fmt.Println(<-c)
+		bruteforcer.jobs++
+		go bruteforcer.tryMove(stats, isForward, movers)
 	}
 }
 
@@ -69,6 +74,8 @@ func (bruteforcer *Bruteforcer) Bruteforce() {
 	mover3 := Mover{5}
 	mover4 := Mover{10}
 
+	bruteforcer.c = make(chan Stats)
+
 	stats := Stats{
 		Movers{mover1, mover2, mover3, mover4},
 		Movers{},
@@ -78,6 +85,13 @@ func (bruteforcer *Bruteforcer) Bruteforce() {
 	}
 
 	bruteforcer.multiply(stats, true)
+
+	for {
+		fmt.Println(<-bruteforcer.c)
+		if bruteforcer.jobs == 0 {
+			break
+		}
+	}
 }
 
 func (bruteforcer *Bruteforcer) GetBestResult() Stats {
