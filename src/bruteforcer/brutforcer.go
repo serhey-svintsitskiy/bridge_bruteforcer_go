@@ -1,6 +1,7 @@
 package bruteforcer
 
 import (
+	"fmt"
 	"gonum.org/v1/gonum/stat/combin"
 )
 
@@ -30,11 +31,12 @@ func (bruteforcer *Bruteforcer) getComb(movers Movers, quantity int) []Movers {
 	return combinationList
 }
 
-func (bruteforcer *Bruteforcer) tryMove(stats Stats, isForward bool, movers Movers) {
+func (bruteforcer *Bruteforcer) tryMove(stats Stats, isForward bool, movers Movers, c chan Stats) {
 	stats.move(movers, isForward)
 
 	if stats.isFinished() {
-		bruteforcer.addResult(stats)
+		c <- stats
+		//bruteforcer.addResult(stats)
 		return
 	}
 
@@ -53,7 +55,10 @@ func (bruteforcer *Bruteforcer) multiply(stats Stats, isForward bool) {
 
 	combList := bruteforcer.getComb(possibleMovers, moversCount)
 	for _, movers := range combList {
-		bruteforcer.tryMove(stats, isForward, movers)
+		c := make(chan Stats)
+		go bruteforcer.tryMove(stats, isForward, movers, c)
+
+		fmt.Println(<-c)
 	}
 }
 
